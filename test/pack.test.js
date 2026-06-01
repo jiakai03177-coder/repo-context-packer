@@ -65,3 +65,27 @@ test("ignore rules skip generated directories", () => {
   assert.equal(internals.isIgnored("node_modules/pkg/index.js"), true);
   assert.equal(internals.isIgnored("src/index.js"), false);
 });
+
+test("packRepository respects common .gitignore patterns", async () => {
+  const root = await makeTempRepo();
+  await fs.writeFile(
+    path.join(root, ".gitignore"),
+    ["ignored-dir/", "*.txt", "logs/*.md", "!keep.txt"].join("\n"),
+    "utf8"
+  );
+  await fs.mkdir(path.join(root, "ignored-dir"), { recursive: true });
+  await fs.mkdir(path.join(root, "logs"), { recursive: true });
+  await fs.writeFile(path.join(root, "ignored-dir", "index.js"), "export const hidden = true;", "utf8");
+  await fs.writeFile(path.join(root, "token.txt"), "hidden", "utf8");
+  await fs.writeFile(path.join(root, "logs", "debug.md"), "hidden", "utf8");
+  await fs.writeFile(path.join(root, "keep.txt"), "visible", "utf8");
+
+  const outDir = path.join(root, ".context-pack");
+  await packRepository({ root, outDir });
+
+  const fileMap = await fs.readFile(path.join(outDir, "file-map.md"), "utf8");
+  assert.doesNotMatch(fileMap, /ignored-dir/);
+  assert.doesNotMatch(fileMap, /token\.txt/);
+  assert.doesNotMatch(fileMap, /logs\/debug\.md/);
+  assert.match(fileMap, /keep\.txt/);
+});

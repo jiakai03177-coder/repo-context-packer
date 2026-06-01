@@ -67,9 +67,81 @@ function toPosix(value) {
   return value.split(path.sep).join("/");
 }
 
-function isIgnored(relativePath, extraIgnores = new Set()) {
+function globToRegex(pattern, options = {}) {
+  const escaped = pattern
+    .replace(/[.+^${}()|[\]\\]/g, "\\$&")
+    .replace(/\*/g, "[^/]*")
+    .replace(/\?/g, "[^/]");
+  return new RegExp(options.exact === false ? escaped : `^${escaped}$`);
+}
+
+function parseIgnoreRules(text) {
+  const rules = [];
+
+  for (const rawLine of text.split(/\r?\n/)) {
+    const line = rawLine.trim();
+    if (!line || line.startsWith("#")) {
+      continue;
+    }
+
+    const negated = line.startsWith("!");
+    const cleanLine = negated ? line.slice(1) : line;
+    const directoryOnly = cleanLine.endsWith("/");
+    const anchored = cleanLine.startsWith("/");
+    const pattern = cleanLine.replace(/^\/+|\/+$/g, "");
+
+    if (pattern) {
+      rules.push({ anchored, directoryOnly, negated, pattern });
+    }
+  }
+
+  return rules;
+}
+
+function matchesIgnoreRule(relativePath, rule) {
+  const normalized = toPosix(relativePath);
+  const parts = normalized.split("/");
+  const hasSlash = rule.pattern.includes("/");
+  const regex = globToRegex(rule.pattern);
+
+  if (rule.directoryOnly) {
+    const directories = parts.slice(0, -1);
+    if (!hasSlash) {
+      return directories.some((part) => regex.test(part));
+    }
+
+    if (rule.anchored) {
+      return normalized.startsWith(`${rule.pattern}/`);
+    }
+
+    return directories.some((_, index) => regex.test(directories.slice(index).join("/")));
+  }
+
+  if (!hasSlash) {
+    return parts.some((part) => regex.test(part));
+  }
+
+  if (rule.anchored) {
+    return regex.test(normalized);
+  }
+
+  return regex.test(normalized) || globToRegex(`*/${rule.pattern}`).test(normalized);
+}
+
+function isIgnored(relativePath, extraIgnores = new Set(), ignoreRules = []) {
   const parts = toPosix(relativePath).split("/");
-  return parts.some((part) => DEFAULT_IGNORES.has(part) || extraIgnores.has(part));
+  if (parts.some((part) => DEFAULT_IGNORES.has(part) || extraIgnores.has(part))) {
+    return true;
+  }
+
+  let ignored = false;
+  for (const rule of ignoreRules) {
+    if (matchesIgnoreRule(relativePath, rule)) {
+      ignored = !rule.negated;
+    }
+  }
+
+  return ignored;
 }
 
 function isTextLike(filePath) {
@@ -81,6 +153,7 @@ function isTextLike(filePath) {
 async function walk(root, options = {}) {
   const files = [];
   const extraIgnores = options.extraIgnores ?? new Set();
+  const ignoreRules = options.ignoreRules ?? [];
 
   async function visit(current) {
     const entries = await fs.readdir(current, { withFileTypes: true });
@@ -90,7 +163,7 @@ async function walk(root, options = {}) {
       const absolute = path.join(current, entry.name);
       const relative = path.relative(root, absolute);
 
-      if (isIgnored(relative, extraIgnores)) {
+      if (isIgnored(relative, extraIgnores, ignoreRules)) {
         continue;
       }
 
@@ -375,24 +448,17 @@ export async function packRepository(options) {
   const maxFileBytes = options.maxFileBytes ?? 80_000;
   const outRelative = path.relative(root, outDir);
   const extraIgnores = new Set(outRelative && !outRelative.startsWith("..") ? [outRelative.split(path.sep)[0]] : []);
-  // Merge .gitignore entries into extraIgnores
+  let ignoreRules = [];
   const gitignorePath = path.join(root, ".gitignore");
   try {
     const gitignoreText = await fs.readFile(gitignorePath, "utf8");
-    for (const line of gitignoreText.split(/\r?\n/)) {
-      const trimmed = line.trim();
-      if (trimmed && !trimmed.startsWith("#")) {
-        // Strip leading/trailing slashes for simple segment matching
-        const segment = trimmed.replace(/^\/|\/$|\/$/g, "").split("/")[0];
-        if (segment) extraIgnores.add(segment);
-      }
-    }
+    ignoreRules = parseIgnoreRules(gitignoreText);
   } catch {
-    // No .gitignore found — that's fine, proceed without it
+    // Missing .gitignore is fine; the built-in ignores still apply.
   }
 
   await fs.access(root);
-  const files = await walk(root, { extraIgnores });
+  const files = await walk(root, { extraIgnores, ignoreRules });
   const selected = files.slice(0, maxFiles);
   const summaries = [];
 
@@ -427,6 +493,7 @@ export const internals = {
   isIgnored,
   isTextLike,
   languageFor,
+  parseIgnoreRules,
   summarizePackageJson,
   title
 };

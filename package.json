@@ -1,6 +1,6 @@
 {
   "name": "repo-context-packer",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "Generate AI-ready context packs for any codebase in seconds.",
   "type": "module",
   "bin": {
