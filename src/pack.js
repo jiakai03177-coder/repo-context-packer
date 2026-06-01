@@ -375,6 +375,21 @@ export async function packRepository(options) {
   const maxFileBytes = options.maxFileBytes ?? 80_000;
   const outRelative = path.relative(root, outDir);
   const extraIgnores = new Set(outRelative && !outRelative.startsWith("..") ? [outRelative.split(path.sep)[0]] : []);
+  // Merge .gitignore entries into extraIgnores
+  const gitignorePath = path.join(root, ".gitignore");
+  try {
+    const gitignoreText = await fs.readFile(gitignorePath, "utf8");
+    for (const line of gitignoreText.split(/\r?\n/)) {
+      const trimmed = line.trim();
+      if (trimmed && !trimmed.startsWith("#")) {
+        // Strip leading/trailing slashes for simple segment matching
+        const segment = trimmed.replace(/^\/|\/$|\/$/g, "").split("/")[0];
+        if (segment) extraIgnores.add(segment);
+      }
+    }
+  } catch {
+    // No .gitignore found — that's fine, proceed without it
+  }
 
   await fs.access(root);
   const files = await walk(root, { extraIgnores });
