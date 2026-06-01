@@ -1,0 +1,36 @@
+{
+  "name": "repo-context-packer",
+  "version": "0.1.0",
+  "description": "Generate AI-ready context packs for any codebase in seconds.",
+  "type": "module",
+  "bin": {
+    "repo-context-packer": "./src/cli.js"
+  },
+  "scripts": {
+    "start": "node ./src/cli.js",
+    "lint": "node --check ./src/cli.js && node --check ./src/pack.js",
+    "test": "node --test"
+  },
+  "keywords": [
+    "ai",
+    "coding-agent",
+    "developer-tools",
+    "cli",
+    "context",
+    "repository"
+  ],
+  "author": "jiakai03177-coder",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jiakai03177-coder/repo-context-packer.git"
+  },
+  "files": [
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "engines": {
+    "node": ">=20"
+  }
+}
