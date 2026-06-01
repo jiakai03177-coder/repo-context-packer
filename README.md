@@ -5,6 +5,26 @@ Generate AI-ready context packs for any codebase in seconds.
 Repo Context Packer scans a repository and creates a compact `.context-pack/`
 folder that helps coding agents understand the project before making changes.
 
+## Demo
+
+Run against any repo in seconds:
+
+```bash
+repo-context-packer --root .
+```
+
+**Example output:**
+
+```
+.context-pack/
+  overview.md
+  file-map.md
+  dependencies.md
+  agent-prompt.md
+```
+
+Then paste `agent-prompt.md` into your AI coding agent (Cursor, Copilot Chat, Claude, etc.) and it will have full project context before writing a single line.
+
 ## Why
 
 AI coding tools work better when they get crisp repository context: structure,
