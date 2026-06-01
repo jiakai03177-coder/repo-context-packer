@@ -16,11 +16,13 @@ Options:
   --root <path>       Repository root to scan. Defaults to current directory.
   --out <path>        Output directory. Defaults to <root>/.context-pack.
   --max-files <n>     Maximum files to summarize. Defaults to 200.
+  --token-budget <n>  Approximate token budget for agent-prompt.md.
   --help              Show this help message.
 
 Examples:
   repo-context-packer
   repo-context-packer --root ../my-app --out ./context-pack
+  repo-context-packer --token-budget 8000
 `);
 }
 
@@ -28,7 +30,8 @@ function readArgs(argv) {
   const args = {
     root: process.cwd(),
     out: null,
-    maxFiles: 200
+    maxFiles: 200,
+    tokenBudget: null
   };
 
   for (let index = 0; index < argv.length; index += 1) {
@@ -54,11 +57,20 @@ function readArgs(argv) {
       continue;
     }
 
+    if (arg === "--token-budget") {
+      args.tokenBudget = Number(argv[++index]);
+      continue;
+    }
+
     throw new Error(`Unknown option: ${arg}`);
   }
 
   if (!Number.isInteger(args.maxFiles) || args.maxFiles < 1) {
     throw new Error("--max-files must be a positive integer");
+  }
+
+  if (args.tokenBudget !== null && (!Number.isInteger(args.tokenBudget) || args.tokenBudget < 100)) {
+    throw new Error("--token-budget must be an integer of at least 100");
   }
 
   args.root = path.resolve(args.root);
@@ -77,7 +89,8 @@ try {
   const result = await packRepository({
     root: args.root,
     outDir: args.out,
-    maxFiles: args.maxFiles
+    maxFiles: args.maxFiles,
+    tokenBudget: args.tokenBudget
   });
 
   console.log(`Context pack written to ${result.outDir}`);

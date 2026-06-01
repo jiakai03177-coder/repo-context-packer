@@ -397,14 +397,17 @@ function renderDependencies(manifests) {
   return lines.join("\n");
 }
 
-function renderAgentPrompt({ root, summaries }) {
-  const files = summaries
-    .slice(0, 40)
-    .map((summary) => {
-      const signals = summary.signals.length ? summary.signals.join("; ") : summary.preview.join(" / ");
-      return `- ${summary.path}: ${signals || "text file"}`;
-    })
-    .join("\n");
+function estimateTokens(text) {
+  return Math.ceil(text.length / 4);
+}
+
+function renderPromptText({ root, summaries, fileLines, tokenBudget, truncated }) {
+  const budgetLines = tokenBudget
+    ? `Approximate token budget: ${tokenBudget}\nIncluded file signals: ${fileLines.length}/${summaries.length}\n\n`
+    : "";
+  const truncationNote = truncated
+    ? "\nSome file signals were omitted to stay within the requested token budget.\n"
+    : "";
 
   return `# Agent Prompt
 
@@ -418,12 +421,58 @@ Start by reading:
 2. \`.context-pack/file-map.md\`
 3. \`.context-pack/dependencies.md\`
 
-Important files and signals:
+${budgetLines}Important files and signals:
 
-${files || "- No summarized files were available."}
-
+${fileLines.join("\n") || "- No summarized files were available."}
+${truncationNote}
 When editing this repository, preserve existing style, keep changes scoped, and run the relevant tests or checks before finishing.
 `;
+}
+
+function renderAgentPrompt({ root, summaries, tokenBudget = null }) {
+  const candidateLines = summaries
+    .slice(0, 40)
+    .map((summary) => {
+      const signals = summary.signals.length ? summary.signals.join("; ") : summary.preview.join(" / ");
+      return `- ${summary.path}: ${signals || "text file"}`;
+    });
+
+  if (!tokenBudget) {
+    return renderPromptText({
+      root,
+      summaries,
+      fileLines: candidateLines,
+      tokenBudget,
+      truncated: false
+    });
+  }
+
+  const fileLines = [];
+  let truncated = false;
+
+  for (const line of candidateLines) {
+    const candidate = [...fileLines, line];
+    const prompt = renderPromptText({
+      root,
+      summaries,
+      fileLines: candidate,
+      tokenBudget,
+      truncated: candidate.length < candidateLines.length
+    });
+
+    if (estimateTokens(prompt) <= tokenBudget) {
+      fileLines.push(line);
+    } else {
+      truncated = true;
+      break;
+    }
+  }
+
+  if (fileLines.length < candidateLines.length) {
+    truncated = true;
+  }
+
+  return renderPromptText({ root, summaries, fileLines, tokenBudget, truncated });
 }
 
 async function collectManifests(files, maxBytes) {
@@ -446,6 +495,7 @@ export async function packRepository(options) {
   const outDir = path.resolve(options.outDir ?? path.join(root, ".context-pack"));
   const maxFiles = options.maxFiles ?? 200;
   const maxFileBytes = options.maxFileBytes ?? 80_000;
+  const tokenBudget = options.tokenBudget ?? null;
   const outRelative = path.relative(root, outDir);
   const extraIgnores = new Set(outRelative && !outRelative.startsWith("..") ? [outRelative.split(path.sep)[0]] : []);
   let ignoreRules = [];
@@ -474,7 +524,7 @@ export async function packRepository(options) {
     ["overview.md", renderOverview({ root, files, summaries })],
     ["file-map.md", renderFileMap(files, summaries)],
     ["dependencies.md", renderDependencies(manifests)],
-    ["agent-prompt.md", renderAgentPrompt({ root, summaries })]
+    ["agent-prompt.md", renderAgentPrompt({ root, summaries, tokenBudget })]
   ]);
 
   for (const [fileName, content] of outputs.entries()) {
@@ -492,6 +542,7 @@ export async function packRepository(options) {
 export const internals = {
   isIgnored,
   isTextLike,
+  estimateTokens,
   languageFor,
   parseIgnoreRules,
   summarizePackageJson,

@@ -40,12 +40,6 @@ From GitHub:
 npm install -g github:jiakai03177-coder/repo-context-packer
 ```
 
-After npm publishing:
-
-```bash
-npm install -g repo-context-packer
-```
-
 For local development:
 
 ```bash
@@ -70,6 +64,12 @@ Limit the number of summarized files:
 
 ```bash
 repo-context-packer --max-files 120
+```
+
+Generate a smaller agent prompt for a specific context window:
+
+```bash
+repo-context-packer --token-budget 8000
 ```
 
 ## Output
@@ -106,7 +106,7 @@ ai coding-agent cli developer-tools repository context-pack productivity
 ## Roadmap
 
 - ~~Add `.gitignore`-aware scanning.~~ Done in v0.1.1
-- Add token-budgeted output modes.
+- ~~Add token-budgeted output modes.~~ Done in v0.2.0
 - Add richer summaries for Python, TypeScript, Rust, and Go.
 - Add GitHub Action mode for automatic context packs on pull requests.
 

@@ -89,3 +89,24 @@ test("packRepository respects common .gitignore patterns", async () => {
   assert.doesNotMatch(fileMap, /logs\/debug\.md/);
   assert.match(fileMap, /keep\.txt/);
 });
+
+test("packRepository can cap agent prompt with a token budget", async () => {
+  const root = await makeTempRepo();
+  for (let index = 0; index < 30; index += 1) {
+    const name = `feature-${String(index).padStart(2, "0")}.js`;
+    await fs.writeFile(
+      path.join(root, "src", name),
+      `export function feature${index}() {\n  return "${"signal ".repeat(20)}";\n}\n`,
+      "utf8"
+    );
+  }
+
+  const outDir = path.join(root, ".context-pack");
+  await packRepository({ root, outDir, tokenBudget: 450 });
+
+  const agentPrompt = await fs.readFile(path.join(outDir, "agent-prompt.md"), "utf8");
+  assert.ok(internals.estimateTokens(agentPrompt) <= 450);
+  assert.match(agentPrompt, /Approximate token budget: 450/);
+  assert.match(agentPrompt, /Some file signals were omitted/);
+  assert.doesNotMatch(agentPrompt, /feature-29\.js/);
+});
