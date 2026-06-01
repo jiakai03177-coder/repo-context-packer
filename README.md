@@ -105,7 +105,7 @@ ai coding-agent cli developer-tools repository context-pack productivity
 
 ## Roadmap
 
-- Add `.gitignore`-aware scanning.
+- ~~Add `.gitignore`-aware scanning.~~ ✅ Done in v0.1.1
 - Add token-budgeted output modes.
 - Add richer summaries for Python, TypeScript, Rust, and Go.
 - Add GitHub Action mode for automatic context packs on pull requests.
